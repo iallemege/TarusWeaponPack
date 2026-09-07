@@ -1,0 +1,17 @@
+.vs/
+.idea/
+Thumbs.db
+Desktop.ini
+*.user
+*.suo
+*.pdb
+*.zip
+bin/
+obj/
+*.dll
+*.blend
+*.fbx
+*.dae
+assets/source/
+assets/_src/
+*.log
