@@ -7,7 +7,7 @@ namespace TarusWeaponPack
     {
         public const string GUID = "com.ial.tarusweaponpack";
         public const string Name = "TarusWeaponPack";
-        public const string Version = "1.1.8";
+        public const string Version = "1.1.9";
     }
 
 #if !TARUS_PACK

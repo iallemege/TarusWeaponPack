@@ -244,11 +244,11 @@ namespace RR106
 
         private static Material MakeMaterial(Shader preferred, MtlDef def)
         {
-            Shader shader = Shader.Find("Universal Render Pipeline/Simple Lit");
-            if (shader == null)
-                shader = preferred;
+            Shader shader = preferred;
             if (shader == null)
                 shader = Shader.Find("Universal Render Pipeline/Lit");
+            if (shader == null)
+                shader = Shader.Find("Universal Render Pipeline/Simple Lit");
             if (shader == null)
                 shader = Shader.Find("Standard");
             if (shader == null)
@@ -257,7 +257,8 @@ namespace RR106
                 return null;
             Material mat = new Material(shader);
             mat.name = "RR106_" + (def.name != null ? def.name : "mat");
-            Color albedo = _albedo != null ? Color.white : def.kd;
+            Texture2D map = TextureFor(def);
+            Color albedo = map != null && map != WhiteTex() ? Color.white : def.kd;
             albedo.a = def.opacity;
             try
             {
@@ -265,14 +266,16 @@ namespace RR106
                     mat.SetFloat("_Surface", 0f);
                 if (mat.HasProperty("_ZWrite"))
                     mat.SetFloat("_ZWrite", 1f);
+                if (mat.HasProperty("_Cull"))
+                    mat.SetFloat("_Cull", 2f);
                 if (mat.HasProperty("_Metallic"))
                     mat.SetFloat("_Metallic", 0f);
                 if (mat.HasProperty("_Smoothness"))
-                    mat.SetFloat("_Smoothness", 0.05f);
+                    mat.SetFloat("_Smoothness", 0.22f);
                 if (mat.HasProperty("_Glossiness"))
-                    mat.SetFloat("_Glossiness", 0.05f);
+                    mat.SetFloat("_Glossiness", 0.22f);
                 if (mat.HasProperty("_GlossMapScale"))
-                    mat.SetFloat("_GlossMapScale", 0.05f);
+                    mat.SetFloat("_GlossMapScale", 0.22f);
                 if (mat.HasProperty("_SpecularHighlights"))
                     mat.SetFloat("_SpecularHighlights", 0f);
                 if (mat.HasProperty("_EnvironmentReflections"))
@@ -292,14 +295,7 @@ namespace RR106
                 if (mat.HasProperty("_Color"))
                     mat.SetColor("_Color", albedo);
                 mat.color = albedo;
-                if (_albedo != null)
-                {
-                    mat.mainTexture = _albedo;
-                    if (mat.HasProperty("_BaseMap"))
-                        mat.SetTexture("_BaseMap", _albedo);
-                    if (mat.HasProperty("_MainTex"))
-                        mat.SetTexture("_MainTex", _albedo);
-                }
+                BindBaseMap(mat, map);
                 if (def.ke.r + def.ke.g + def.ke.b > 0.05f)
                 {
                     Color emit = def.ke;
@@ -316,6 +312,55 @@ namespace RR106
             {
             }
             return mat;
+        }
+
+        private static Texture2D _white;
+
+        private static Texture2D TextureFor(MtlDef def)
+        {
+            if (def != null && !string.IsNullOrEmpty(def.mapKd))
+            {
+                Texture2D mapped = LoadAlbedo(ResolveAssetPath(Path.GetFileName(def.mapKd)));
+                if (mapped != null)
+                    return mapped;
+            }
+            if (_albedo != null)
+                return _albedo;
+            return WhiteTex();
+        }
+
+        private static Texture2D WhiteTex()
+        {
+            if (_white != null)
+                return _white;
+            Texture2D t = new Texture2D(1, 1, TextureFormat.RGBA32, false, false);
+            t.SetPixel(0, 0, Color.white);
+            t.Apply(false, true);
+            t.name = "RR106_White";
+            _white = t;
+            return _white;
+        }
+
+        private static void BindBaseMap(Material mat, Texture2D tex)
+        {
+            if (mat == null)
+                return;
+            Texture2D map = tex != null ? tex : WhiteTex();
+            mat.mainTexture = map;
+            if (mat.HasProperty("_BaseMap"))
+            {
+                mat.SetTexture("_BaseMap", map);
+                mat.SetTextureScale("_BaseMap", Vector2.one);
+                mat.SetTextureOffset("_BaseMap", Vector2.zero);
+            }
+            if (mat.HasProperty("_MainTex"))
+            {
+                mat.SetTexture("_MainTex", map);
+                mat.SetTextureScale("_MainTex", Vector2.one);
+                mat.SetTextureOffset("_MainTex", Vector2.zero);
+            }
+            try { mat.EnableKeyword("_BASEMAP"); }
+            catch { }
         }
 
         internal static string ResolveAssetPath(string fileName)
@@ -436,6 +481,7 @@ namespace RR106
         internal Color ke = Color.black;
         internal float ns = 80f;
         internal float opacity = 1f;
+        internal string mapKd;
 
         private static MtlDef MakeDefault()
         {
@@ -478,6 +524,8 @@ namespace RR106
                     cur.ns = ParseF(p[1]);
                 else if (p[0] == "d" && p.Length >= 2)
                     cur.opacity = ParseF(p[1]);
+                else if (p[0] == "map_Kd" && p.Length >= 2)
+                    cur.mapKd = p[p.Length - 1];
             }
             return map;
         }

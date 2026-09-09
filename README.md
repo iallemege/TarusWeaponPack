@@ -7,7 +7,7 @@ BepInEx plugin pack for [Nuclear Option](https://store.steampowered.com/app/2167
 ## Install
 
 1. [BepInEx 5](https://github.com/BepInEx/BepInEx) in the Nuclear Option game folder.
-2. Download **TarusWeaponPack-1.1.8.zip** from [Releases](https://github.com/iallemege/TarusWeaponPack/releases).
+2. Download **TarusWeaponPack-1.1.9.zip** from [Releases](https://github.com/iallemege/TarusWeaponPack/releases).
 3. Extract into the game folder so these land in `BepInEx/plugins/`:
    - `TarusWeaponPack.dll`
    - `TarusWeaponPackAssets\` (meshes + hangar icons)

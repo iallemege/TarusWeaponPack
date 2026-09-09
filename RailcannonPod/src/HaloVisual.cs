@@ -21,6 +21,7 @@ namespace RailcannonPod
 
         private static Mesh _mesh;
         private static MtlDef[] _defs;
+        private static Texture2D _white;
         private static bool _loadAttempted;
         private static string _lastError;
 
@@ -383,11 +384,11 @@ namespace RailcannonPod
 
         private static Material MakeMaterial(Shader preferred, MtlDef def)
         {
-            Shader shader = Shader.Find("Universal Render Pipeline/Simple Lit");
-            if (shader == null)
-                shader = preferred;
+            Shader shader = preferred;
             if (shader == null)
                 shader = Shader.Find("Universal Render Pipeline/Lit");
+            if (shader == null)
+                shader = Shader.Find("Universal Render Pipeline/Simple Lit");
             if (shader == null)
                 shader = Shader.Find("Standard");
             if (shader == null)
@@ -396,22 +397,26 @@ namespace RailcannonPod
                 return null;
             Material mat = new Material(shader);
             mat.name = "HaloRailgun_" + (def.name != null ? def.name : "mat");
-            Color albedo = def.kd;
+            Texture2D map = TextureFor(def);
+            Color albedo = map != null && map != WhiteTex() ? Color.white : VisibleKd(def.kd);
             albedo.a = def.opacity;
+            float smooth = SmoothnessFromNs(def.ns);
             try
             {
                 if (mat.HasProperty("_Surface"))
                     mat.SetFloat("_Surface", 0f);
                 if (mat.HasProperty("_ZWrite"))
                     mat.SetFloat("_ZWrite", 1f);
+                if (mat.HasProperty("_Cull"))
+                    mat.SetFloat("_Cull", 2f);
                 if (mat.HasProperty("_Metallic"))
                     mat.SetFloat("_Metallic", 0f);
                 if (mat.HasProperty("_Smoothness"))
-                    mat.SetFloat("_Smoothness", 0.05f);
+                    mat.SetFloat("_Smoothness", smooth);
                 if (mat.HasProperty("_Glossiness"))
-                    mat.SetFloat("_Glossiness", 0.05f);
+                    mat.SetFloat("_Glossiness", smooth);
                 if (mat.HasProperty("_GlossMapScale"))
-                    mat.SetFloat("_GlossMapScale", 0.05f);
+                    mat.SetFloat("_GlossMapScale", smooth);
                 if (mat.HasProperty("_SpecularHighlights"))
                     mat.SetFloat("_SpecularHighlights", 0f);
                 if (mat.HasProperty("_EnvironmentReflections"))
@@ -431,6 +436,7 @@ namespace RailcannonPod
                 if (mat.HasProperty("_Color"))
                     mat.SetColor("_Color", albedo);
                 mat.color = albedo;
+                BindBaseMap(mat, map);
                 if (def.ke.r + def.ke.g + def.ke.b > 0.05f)
                 {
                     Color emit = def.ke;
@@ -447,6 +453,92 @@ namespace RailcannonPod
             {
             }
             return mat;
+        }
+
+        private static Texture2D TextureFor(MtlDef def)
+        {
+            if (def != null && !string.IsNullOrEmpty(def.mapKd))
+            {
+                Texture2D mapped = LoadAlbedo(ResolveAssetPath(Path.GetFileName(def.mapKd)));
+                if (mapped != null)
+                    return mapped;
+            }
+            return WhiteTex();
+        }
+
+        private static Color VisibleKd(Color kd)
+        {
+            float m = kd.maxColorComponent;
+            if (m < 0.04f)
+                return new Color(0.18f, 0.18f, 0.18f, kd.a);
+            if (m < 0.10f)
+                return new Color(kd.r * 1.8f, kd.g * 1.8f, kd.b * 1.8f, kd.a);
+            return kd;
+        }
+
+        private static float SmoothnessFromNs(float ns)
+        {
+            if (ns <= 1f)
+                return 0.18f;
+            return Mathf.Clamp(ns / 1000f, 0.08f, 0.75f);
+        }
+
+        private static Texture2D WhiteTex()
+        {
+            if (_white != null)
+                return _white;
+            Texture2D t = new Texture2D(1, 1, TextureFormat.RGBA32, false, false);
+            t.SetPixel(0, 0, Color.white);
+            t.Apply(false, true);
+            t.name = "HaloRailgun_White";
+            _white = t;
+            return _white;
+        }
+
+        private static void BindBaseMap(Material mat, Texture2D tex)
+        {
+            if (mat == null)
+                return;
+            Texture2D map = tex != null ? tex : WhiteTex();
+            mat.mainTexture = map;
+            if (mat.HasProperty("_BaseMap"))
+            {
+                mat.SetTexture("_BaseMap", map);
+                mat.SetTextureScale("_BaseMap", Vector2.one);
+                mat.SetTextureOffset("_BaseMap", Vector2.zero);
+            }
+            if (mat.HasProperty("_MainTex"))
+            {
+                mat.SetTexture("_MainTex", map);
+                mat.SetTextureScale("_MainTex", Vector2.one);
+                mat.SetTextureOffset("_MainTex", Vector2.zero);
+            }
+            try { mat.EnableKeyword("_BASEMAP"); }
+            catch { }
+        }
+
+        private static Texture2D LoadAlbedo(string path)
+        {
+            if (string.IsNullOrEmpty(path) || !File.Exists(path))
+                return null;
+            try
+            {
+                byte[] bytes = File.ReadAllBytes(path);
+                Texture2D tex = new Texture2D(2, 2, TextureFormat.RGBA32, true, false);
+                if (!ImageConversion.LoadImage(tex, bytes, false))
+                {
+                    UnityEngine.Object.Destroy(tex);
+                    return null;
+                }
+                tex.name = Path.GetFileNameWithoutExtension(path);
+                tex.wrapMode = TextureWrapMode.Repeat;
+                tex.filterMode = FilterMode.Bilinear;
+                return tex;
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         internal static string ResolveAssetPath(string fileName)
@@ -543,6 +635,7 @@ namespace RailcannonPod
         internal Color ke = Color.black;
         internal float ns = 80f;
         internal float opacity = 1f;
+        internal string mapKd;
 
         private static MtlDef MakeDefault()
         {
@@ -585,6 +678,8 @@ namespace RailcannonPod
                     cur.ns = ParseF(p[1]);
                 else if (p[0] == "d" && p.Length >= 2)
                     cur.opacity = ParseF(p[1]);
+                else if (p[0] == "map_Kd" && p.Length >= 2)
+                    cur.mapKd = p[p.Length - 1];
             }
             return map;
         }

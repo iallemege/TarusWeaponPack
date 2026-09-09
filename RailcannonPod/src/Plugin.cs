@@ -13,7 +13,7 @@ namespace RailcannonPod
     {
         public const string GUID = "com.ial.railcannonpod";
         public const string Name = "RailcannonPod";
-        public const string Version = "1.2.6";
+        public const string Version = "1.2.7";
         public const string TarusPackGuid = "com.ial.tarusweaponpack";
     }
 
